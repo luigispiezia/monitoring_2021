@@ -1,0 +1,26 @@
+#Spatial r
+
+#install packages
+install.packages("sp)
+library(sp)
+
+#view the dataset
+data(meuse)
+head(meuse) #see the first 6 lines of the dataset
+
+#we state in R that we are making use of coordinates
+coordinates(meuse)= ~x+y
+plot(meuse) #to see the set in space
+
+# spplot is used to plot elements like zinc, lead etc. spread in space
+spplot(meuse, "zinc", main="spread of zinc") 
+
+#plot the concentration of copper
+spplot(meuse,"copper", main= concentration of copper")
+
+#exercise: see copper and zinc
+spplot(meuse, c("copper","zinc"), main= "concentration of copper and zinc")
+
+#rather then using color, let's make use of bubbles.
+bubble(meuse, "zinc")
+bubble(meuse, "lead", col="red")
