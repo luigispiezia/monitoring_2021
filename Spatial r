@@ -24,3 +24,81 @@ spplot(meuse, c("copper","zinc"), main= "concentration of copper and zinc")
 #rather then using color, let's make use of bubbles.
 bubble(meuse, "zinc")
 bubble(meuse, "lead", col="red")
+
+#install packages
+install.packages ("ggplot2")
+library(ggplot2)
+
+#ecological dataframe
+# biofuels, amount of energy that can be producted with biofuel
+biofuels <- c(120, 200, 350, 570, 750) #array of values
+biofuels
+#higher the biofuel, higher the oxydative power of the reaction
+#oxydative enzimes
+oxydative <- c(1200, 1300, 21000, 34000, 50000)
+oxydative
+
+#build dataframe
+#first column biofuel, second oygen
+d<- data.frame (biofuels, oxydative)
+d
+
+#ggplot function
+#point
+ggplot(d, aes(x=biofuels, y= oxydative)) + geom_point(col="red", size=5)
+#line
+ggplot(d, aes(x=biofuels, y= oxydative)) + geom_line(col="blue", size=2)
+
+#point and line
+ggplot(d, aes(x=biofuels, y= oxydative)) + geom_line(col="blue", size=2) + geom_point(col="red", size=4)
+
+#poligon
+ggplot(d, aes(x=biofuels, y= oxydative)) + geom_polygon()
+
+########## IMPORT DATA FROM AN EXTERNAL SOURCE
+#to know the current working directory
+getwd()
+
+#create a folder under the main disk
+#set the working directory
+setwd("/Users/luigispiezia/lab")
+covid<- read.table("covid_agg.csv", header=TRUE)
+
+#read the first 6 rows datas
+head(covid)
+
+#have information of the statistics
+summary(covid)
+
+#just know which are the variables
+name(covid)
+
+#make the plot
+ggplot(covid, aes(x=lon, y=lat, size= cases)) + geom_point()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
