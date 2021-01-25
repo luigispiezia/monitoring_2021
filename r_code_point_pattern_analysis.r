@@ -1,5 +1,7 @@
 #point pattern analysis
 install.packages("spatstat")
+install.packages("rgdal")
+library(rgdal)
 library(spatstat)
 
 #now let's see the thensity of the covid data
@@ -45,5 +47,51 @@ plot(density_map, col=cl)
 points(covid_planar)
 
 #put countries on the map
-install.packages("rgdal")
-library(rgdal)
+#reading the file of the coastline
+coastlines<- readOGR("ne_10m_coastline.shp")
+
+#replot density map with coastline
+cl <- colorRampPalette(c('orange','red','purple'))(100)
+plot(density_map, col=cl)
+points(covid_planar, pch=19, cex=0.5)
+plot(coastlines, add=TRUE)#add=TRUE to see both coastlines and plot
+
+#make a png image
+png("figure1.png")
+#replot density map with coastline
+cl <- colorRampPalette(c('orange','red','purple'))(100)
+plot(density_map, col=cl)
+points(covid_planar, pch=19, cex=0.5)
+plot(coastlines, add=TRUE)#add=TRUE to see both coastlines and plot
+dev.off() #t turn off th terminal.
+
+########interpolate
+marks(covid_planar) <- cases
+cases_map <- Smooth(covid_planar)
+#replot
+plot(cases_map, col=cl)
+points(covid_planar, pch=19, cex=0.5)
+plot(coastlines, add=TRUE)#add=TRUE or T to see both coastlines and plot
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
