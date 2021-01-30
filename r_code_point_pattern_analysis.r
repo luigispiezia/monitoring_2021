@@ -74,18 +74,50 @@ points(covid_planar, pch=19, cex=0.5)
 plot(coastlines, add=TRUE)#add=TRUE or T to see both coastlines and plot
 
 
- 
+##### plotting point with different size relate to covid data together with the interpolation.
+# use file from outside --> setting working directory
 
+#install and set spatstat
+library(spatstat)
+library(rgdal)
 
+#remember to set working direcory
 
+#read covid_agg dataset. and check
+covid <- read.table("covid_agg.csv", header=TRUE) 
 
+head(covid)
+attach(covid) #to consider lat and lot, if you not attach: covid$lon
+#interpolate
+   #built ppp planar point pattern, stating lon, lat, range for lon and range from lat.
+   covid_planar <- ppp (lon, lat,c(-180,180), c(-90,90)) #-180 180 are the maximum coordinate in longitude and 90 is for latitude
+   #explaining r that I have the data to do the interpolation
+   marks(covid_planar) <- cases #based on column of cases
+#built the cases map
+cases_map <- Smooth(covid_planar)  #warning message: low amount of point for the cross-validation.
 
+#make a color ramppalette
+cl <- colorRampPalette(c('coral1','brown4','purple'))(100)
 
+#plot the map
+plot(cases_map,col=cl)
+points(covid_planar, pch=19, cex=0.5)
+plot(coastlines, add=TRUE)#add=TRUE or T to see both coastlines and plot
 
+####
+install.packages("sf")
+library(sf)
 
+#take covid data and group the coordinates. (create an array)
+Spoints<-st_as_sf(covid,coords=c("lon","lat"))
+plot(Spoints, cex=Spoints$cases, col='purple3', lwd=3, add=TRUE)  #plot the point dimension by using as cex the number of cases/100000 because if not the number is too high
 
-
-
+#replot
+plot(cases_map,col=cl)
+plot(Spoints, cex=Spoints$cases/10000, col='purple3', lwd=3, add=TRUE)  #plot the point dimension by using as cex the number of cases/100000 because if not the number is too high
+points(covid_planar, pch=19, cex=0.5)
+coastlines<- readOGR("ne_10m_coastline.shp")
+plot(coastlines, add=T)
 
 
 
