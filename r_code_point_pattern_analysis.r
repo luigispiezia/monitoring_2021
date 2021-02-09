@@ -119,10 +119,21 @@ points(covid_planar, pch=19, cex=0.5)
 coastlines<- readOGR("ne_10m_coastline.shp")
 plot(coastlines, add=T)
 
+##### Leonardo Zabotti data
 
+setwd("/Users/luigispiezia/lab")
+leo <- read.table ("dati_zabotti.csv", header=T, sep=",")
 
+head(leo)
+#attach dataset since we are going to use coordinates
+attach(leo)
 
+library(spatstat)
 
+#find minimum and maximum x and y
+summary(leo)
+
+leo_planar <- ppp (lon, lat,c(-,180), c(-90,90)) 
 
 
 
