@@ -56,6 +56,7 @@ head(mouse)
 #cadmium copper lead zinc
 #pairs with soil variables --> seet what are the numbers of column in which this variables are present:
 #column 3,4,5,6
+#the comma , is the starting point
 
 pairs(meuse[,3:6])
 
@@ -77,10 +78,12 @@ pairs(~cadmium + copper + lead + zinc, data= meuse, col=45, pch=17)
 pairs(~cadmium + copper + lead + zinc, data= meuse, col=45, pch=17,cex=2)
 
 
+pol <- meuse [,3:6]
 
+#show the first line of the matrix
+head (pol)
 
-
-
+pairs (pol, col="blue", cex=1.5)
 
 
 
