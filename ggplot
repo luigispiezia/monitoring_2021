@@ -1,0 +1,25 @@
+install.packages ("ggplot2")
+library(ggplot2)
+virus <- c(10, 30, 40, 50, 60, 80)
+death <- c(100, 240, 310, 470, 580, 690)
+
+plot (virus, death, pch=19, cex=2)
+
+# data.frame creates a dataframe,
+
+data.frame(virus, death)
+
+#assign dataframe to an object so we can use it
+
+d<- data.frame (virus, death)
+
+#give some univariant statistics
+summary (d)
+
+#give the geometry: points, geopoint requires aestetic: aes
+ggplot (d, aes(x= virus, y= death)) + geom_point(size=3, col="coral", pch=17) + geom_line()
+
+#use line to CONNECT OBSERVATIONS
+
+# you can also use poligons instead of line with geom_polygon()
+
