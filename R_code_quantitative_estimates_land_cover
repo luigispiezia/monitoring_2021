@@ -1,0 +1,102 @@
+# R_code_quantitative_estimates_land_cover.r
+#data are from the Earth observatory
+
+library(raster)
+library(RStoolbox) # we will use this package to make the classification
+library(ggplot2) # we will use this package for the ggplot function
+# library(gridExtra) # we will use this package for multiframe ggplot
+library(patchwork)
+
+setwd("C:/Users/hp/Desktop/UNIBO/13. MONITORING ECOSYSTEM CHANGES AND FUNCTIONING/Monitoring ecosystem changes and functioning") 
+
+# brick
+# 1 list the files available
+rlist <- list.files(pattern="defor")#the function select the files called "defor"
+rlist
+# 2 lapply: apply a function to a list 
+list_rast <- lapply(rlist, brick) # lapply(x, FUN)
+list_rast
+
+plot(list_rast[[1]])
+
+# defor: NIR 1, red 2, green 3
+plotRGB(list_rast[[1]], r=1, g=2, b=3, stretch="lin")
+
+l1992 <- list_rast[[1]]
+plotRGB(l1992, r=1, g=2, b=3, stretch="lin")
+
+l2006 <- list_rast[[2]]
+plotRGB(l2006, r=1, g=2, b=3, stretch="lin")
+
+# Unsupervised classification: what are the forects and what are the agricultural areas?
+l1992c <- unsuperClass(l1992, nClasses=2) # unsuperClass(x, nClasses) 
+l1992c
+
+plot(l1992c$map)
+# value 1 = agricultural areas and water
+# value 2 = forests 
+
+freq(l1992c$map) #Generate and format frequency tables from a variable or a table, with percentages and formatting options.
+#      value  count
+#[1,]     1  36911 -> agriculture and water
+#[2,]     2 304381 -> forests
+#frequencies may differ from pc to pc because pixels may be assigned differently in classes
+
+total <- 341292
+propagri <- 36911/total
+propforest <- 304381/total
+propagri
+propforest
+# agriculture and water: 0.1081508 ~ 0.10
+# forest: 0.8918492 ~ 0.90
+
+# build a dataframe
+cover <- c("Forest", "Agriculture")
+# prop1992 <- c(0.8982982, 0.1017018)
+prop1992 <- c(propforest, propagri)
+prop1992
+proportion1992 <- data.frame(cover, prop1992)
+proportion1992
+ggplot(proportion1992, aes(x=cover, y=prop1992, color=cover)) + geom_bar(stat="identity", fill="white")
+
+# Classification of 2006
+# Unsupervised classification
+l2006c <- unsuperClass(l2006, nClasses=2) # unsuperClass(x, nClasses) 
+l2006c
+
+plot(l2006c$map)
+# forest: value 1
+# agriculture: value 2
+
+# Frequencies
+freq(l2006c$map)
+
+#  value  count
+#[1,]     1 179275 # forest
+#[2,]     2 163451 # agriculture
+
+# Proportions
+
+total <- 342726
+propagri2006 <- 163451/total
+propforest2006 <- 179275/total
+
+# build a dataframe
+cover <- c("Forest", "Agriculture")
+prop1992 <- c(propforest, propagri)
+prop2006 <- c(propforest2006, propagri2006)
+
+proportion <- data.frame(cover, prop1992, prop2006)
+
+proportion
+ggplot(proportion, aes(x=cover, y=prop2006, color=cover)) + geom_bar(stat="identity", fill="white") + ylim(0,1)
+ggplot(proportion, aes(x=cover, y=prop1992, color=cover)) + geom_bar(stat="identity", fill="white") + ylim(0,1)
+#much more agricultural land now!
+
+# plotting altogether
+
+p1 <- ggplot(proportion, aes(x=cover, y=prop1992, color=cover)) + geom_bar(stat="identity", fill="white")
+p2 <- ggplot(proportion, aes(x=cover, y=prop2006, color=cover)) + geom_bar(stat="identity", fill="white")
+
+# grid.arrange(p1, p2, nrow=1)
+p1+p2
