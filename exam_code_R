@@ -1,0 +1,266 @@
+#################PACKAGES#################
+
+library(dismo)
+library(raster)
+library(maptools)
+library(sp)
+library(spThin)
+library(ggplot2)
+library(patchwork)
+library(RStoolbox)
+library(writexl)
+
+#################SET THE WORKING DIRECTORY#################
+
+setwd("C:/Users/hp/Desktop/Monitoring_exam/")
+
+#################IMPORT DATA#################
+
+Pusa_hispida <- gbif("pusa", "hispida", geo=TRUE, removeZeros = FALSE)
+colnames(Pusa_hispida)
+#longitude: lon 
+#lattitude: lat
+
+#show data only if lat and lon are known values (notNA)
+Ph_geo <- subset(Pusa_hispida, !is.na(lon) & !is.na(lat))
+dim(Ph_geo)
+
+#quickly visualize the data
+data(wrld_simpl)#load wrld_simpl from maptools as SpatialPolygonsDataFrame 
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(-90,90), axes=TRUE, col="light green")
+
+# add the points
+points(Ph_geo$lon, Ph_geo$lat, col='orange', pch=20, cex=0.75)
+
+#################DATA CLEANING#################
+
+#find and delete the duplicates
+dups <- duplicated(Ph_geo[, c('lon', 'lat')])
+sum(dups)#6518
+phg <- Ph_geo[!dups, ]
+dim(phg)#5962
+dim(Ph_geo)#12480
+#we lost 6518 duplicates
+
+
+#make a SPDF and check mismatches
+coordinates(phg) <- ~lon+lat
+crs(phg) <- crs(wrld_simpl)
+class(phg)
+ovr <- over(phg, wrld_simpl)#at the spatial locations of object x 
+#retrieves the indices or attributes from spatial object y
+colnames(Ph_geo)
+#Which points have coordinates that are in a different country 
+#than listed in the 'country' field of the gbif record?
+cntr <- ovr$country
+j <- which(cntr != phg$country)
+# for the mismatches, bind the country names of the polygons and points
+cbind(cntr, phg$country)[j,]#no countries were found as mismatches
+
+
+#plot cleaned data
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(-90,90), axes=TRUE, col="#FFCC66", bg = "light blue", main = "Global distribution of the ringed seal")
+points(phg$lon, phg$lat, col='red', pch=20, cex=0.75)
+
+#back to normal dataframe and save
+phg <- as.data.frame(phg)
+write_xlsx(phg, "C:/Users/hp/Desktop/Monitoring_exam/dataset_phg.xlsx")
+
+#################THINNING#################
+
+thinned_data <- thin(
+  loc.data = dataset_phg,
+  lat.col = "lat",
+  long.col = "lon",
+  spec.col = "acceptedScientificName",
+  thin.par = 5,
+  reps = 1, 
+  locs.thinned.list.return = FALSE,
+  write.files = TRUE,
+  max.files = 5,
+  out.dir="C:/Users/hp/Desktop/Monitoring_exam",
+  out.base = "thinned_data",
+  write.log.file = TRUE,
+  log.file = "spatial_thin_log.txt",
+  verbose = TRUE)
+
+thinned_data <- read.csv("thinned_data.csv", sep = ",")
+dim(thinned_data)#2467
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(-90,90), axes=TRUE, col="#FFCC66", bg = "light blue", main = "Global distribution of the ringed seal")
+points(thinned_data$lon, thinned_data$lat, col='red', pch=20, cex=0.75)
+
+#################IMPORT RASTER LAYERS FOR THE ENV VARIABLES#################
+
+ice_thickness <- raster("C:/Users/hp/Desktop/Monitoring_exam/present/Present.Surface.Ice.thickness.Mean.tif")
+temperature <- raster("C:/Users/hp/Desktop/Monitoring_exam/present/Present.Surface.Temperature.Mean.tif")
+
+#to better visualize the raster layers I apply the ColorRampPalette
+crp <- colorRampPalette(c('red','gold','darkgoldenrod3',"cyan","cyan4","chartreuse1","darkgreen"))(100)
+plot(temperature, col = crp, main = "Global current mean ocean temperature (°C)")
+plot(ice_thickness, col = crp, main = "Global mean ice thickness (m)")
+
+#let's now import the other raster layers and plot all the layers together to have a broader view on these variables
+ice_thickness_100 <- raster("C:/Users/hp/Desktop/Monitoring_exam/2090_2100/ice_2090_2100.tif")
+temperature_100 <- raster("C:/Users/hp/Desktop/Monitoring_exam/2090_2100/temp_2090_2100.tif")
+par(mfrow=c(2,2))
+plot(temperature, col = crp, main = "Global current mean ocean temperature (°C)")
+plot(ice_thickness, col = crp, main = "Global mean ice thickness (m)")
+plot(temperature_100, col = crp, main = "Expected future global mean ocean temperature (2090-2100) (°C)")
+plot(ice_thickness_100, col = crp, main = "Expected future global mean ice thickness (2090-2100) (m)")
+dev.off()
+#as we can see, the most dramatic change is in between current times and the end of the century 
+#for this reason we can computer the difference between the two raster layers and observe 
+#in which regions the change will be stronger
+difference_temp <- temperature_100 - temperature 
+difference_ice <- ice_thickness - ice_thickness_100
+par(mfrow=c(1,2))
+plot(difference_temp, col = crp, main = "Difference in mean ocean temperature at the end of the century (°C)")
+plot(difference_ice, col = crp, main = "Difference in  mean ice thickness at the end of the century (m)")
+dev.off()
+#as we can see the biggest differences are at the Northern Pole (Arctic Circle) 
+
+#apply the crop function to take into consideration only the polar circle
+ext <- c(-180,180, 66, 90)#66 because we follow the extent of the arctic circle
+cropped_temp <- crop(temperature, ext)
+cropped_temp_100 <- crop(temperature_100, ext)
+cropped_ice <- crop(ice_thickness, ext)
+cropped_ice_100 <- crop(ice_thickness_100, ext)
+
+#plot the 4 cropped layers
+par(mfrow=c(2,2))
+plot(cropped_temp, col = crp, main = "Arctic Circle's current mean ocean temperature  (°C)")
+plot(cropped_ice, col = crp, main = "Arctic Circle's current mean ice thickness  (m)")
+plot(cropped_temp_100, col = crp, main = "Arctic Circle's expected mean ocean temperature (2090-2100)  (°C)")
+plot(cropped_ice_100, col = crp, main = "Arctic Circle's expected future mean ice thickness (2090-2100)  (m)")
+dev.off()
+
+#calculate the difference
+AC_difference_temp <-cropped_temp_100 - cropped_temp
+AC_difference_ice <- cropped_ice-cropped_ice_100
+
+#plot the two differences
+par(mfrow=c(1,2))
+plot(AC_difference_temp, col = crp, main = "Arctic Circle's expected future changes in mean ocean temperature (°C)")
+plot(AC_difference_ice, col = crp, main = "Arctic Circle's expected future changes in mean ice thickness  (m)")
+dev.off()
+
+#################PLOT PRESENCE DATA ON A RASTER#################
+
+#create a SPDF
+coordinates(thinned_data) <- ~lon+lat
+crs(thinned_data) <- crs(wrld_simpl)
+class(thinned_data)
+
+#crop on the extent of the Arctic Circle 
+thinned_data2 <- crop(thinned_data, ext)
+
+#plot the presence data related to the polar circle on the raster layer of the current mean temperature
+plot(cropped_temp, col = crp, main = "Current distribution of the ringed seal in the Arctic Circle")
+points(thinned_data2$lon, thinned_data2$lat, col="black", pch=20, cex=0.75)
+legend(70, 94, legend = "Average ocean temperature (°C)")
+#this is the current distribution of Pusa Hispida in the Arctic Circle
+
+#################HYPOTHESIS#################
+
+#Hypothesis: the current distribution of Pusa hispida will probably change
+#due to strong changes in mean temperature and ice thickness 
+#expected for the end for the century (RCP 8.5). Especially, the greatest changes are 
+#expected for the area of the Barents Sea, but also the Norwegian Sea, 
+#Greenland Sea and Kara Sea. 
+
+#################MAXENT#################
+
+#stack raster layers 
+past <- stack(cropped_temp, cropped_ice)
+fut <- stack(cropped_temp_100, cropped_ice_100)
+names(fut) <- names(past) #assign the same names to both
+
+#correlation
+pairs(past)
+pairs(fut)
+
+#MAXENT: x = env variables, p = occurrences (as SPDF or dataframe)
+model <- maxent(p = thinned_data2, x = past, nbg = 20000)
+
+#response curve: prob finding the species at those variable values
+plot(model)#variable importance
+response(model)#curves: probability of occurence on temperature/ice thickness
+
+#prediction past 
+map_past <- predict(model, past)#prob suitability based on current conditions
+
+#prediction future
+map_fut <- predict(model, fut)#prob suitability based on expected future conditions
+
+#save the raster layers
+
+writeRaster(map_past, filename = "C:/Users/hp/Desktop/Monitoring_exam/present")
+writeRaster(map_fut, filename = "C:/Users/hp/Desktop/Monitoring_exam/future")
+
+#plot the layers
+names(map_past) <- "Probability"
+p1 <- ggplot() + geom_raster(map_past, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Present distribution probabilities of the ringed seal")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+names(map_fut) <- "Probability"
+p2 <- ggplot() + geom_raster(map_fut, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Future distribution probabilities of the ringed seal")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+#plot the graphs together (using patchwork package)
+p1 + p2
+
+#plot temperature changes with ggplot2 to better understand the conclusions
+names(cropped_temp) <- "Temperature"
+p3 <- ggplot() + geom_raster(cropped_temp, mapping = aes(x = x,y = y, fill=Temperature))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Current mean temperature (°C)")+labs(x = "Longitude", y = "Latitude") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+names(cropped_temp_100) <- "Temperature"
+p4 <- ggplot() + geom_raster(cropped_temp_100, mapping = aes(x = x,y = y, fill=Temperature))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Expected future mean temperature (°C)")+labs(x = "Longitude", y = "Latitude") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+p3 + p4
+
+names(AC_difference_temp) <- "Variation"
+ggplot() + geom_raster(AC_difference_temp, mapping = aes(x = x,y = y, fill=Variation))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Expected temperature variation at the end of the century (°C)")+labs(x = "Longitude", y = "Latitude") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+#in order to create graphs to be as colorblind-friendly as possible I also plotted the same graphs using cividis
+
+p1 <- ggplot() + geom_raster(map_past, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Present distribution probabilities of the ringed seal")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+p2 <- ggplot() + geom_raster(map_fut, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Future distribution probabilities of the ringed seal")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+p1 + p2
+
+p3 <- ggplot() + geom_raster(cropped_temp, mapping = aes(x = x,y = y, fill=Temperature))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Current mean temperature (°C)")+labs(x = "Longitude", y = "Latitude") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+p4 <- ggplot() + geom_raster(cropped_temp_100, mapping = aes(x = x,y = y, fill=Temperature))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Expected future mean temperature (°C)")+labs(x = "Longitude", y = "Latitude") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+p3 + p4
+
+ggplot() + geom_raster(AC_difference_temp, mapping = aes(x = x,y = y, fill=Variation))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Expected temperature variation at the end of the century (°C)")+labs(x = "Longitude", y = "Latitude") + 
+  theme(axis.title = element_text(size = 15, face = "italic"), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
