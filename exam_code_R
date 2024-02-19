@@ -9,6 +9,7 @@ library(ggplot2)
 library(patchwork)
 library(RStoolbox)
 library(writexl)
+library(jsonlite)
 
 #################SET THE WORKING DIRECTORY#################
 
