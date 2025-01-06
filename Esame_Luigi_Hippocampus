@@ -1,0 +1,97 @@
+################# LOAD PACKAGES #################
+
+library(dismo)
+library(raster)
+library(sp)
+library(ggplot2)
+library(maptools)
+library(writexl)
+library(spThin)
+library(viridis)
+library(jsonlite)
+
+################# SET THE WORKING DIRECTORY #################
+
+setwd("/Users/luigispiezia/Desktop/esame/")
+
+################# IMPORT DATA #################
+
+# Cache GBIF data for Hippocampus erectus to avoid re-downloading
+data_file <- "cached_Hippocampus_data.rds"
+if (file.exists(data_file)) {
+  Hippocampus_data <- readRDS(data_file)
+} else {
+  Hippocampus_data <- gbif("hippocampus", "erectus", geo = TRUE, removeZeros = FALSE)
+  saveRDS(Hippocampus_data, data_file)
+}
+
+# Filter for valid latitude and longitude
+Hippocampus_geo <- subset(Hippocampus_data, !is.na(lon) & !is.na(lat))
+
+# Remove duplicates
+Hippocampus_geo <- Hippocampus_geo[!duplicated(Hippocampus_geo[, c("lon", "lat")]), ]
+
+# Convert to spatial points dataframe
+coordinates(Hippocampus_geo) <- ~lon+lat
+crs(Hippocampus_geo) <- CRS("+proj=longlat +datum=WGS84")
+
+# Load world map for visualization
+data(wrld_simpl)
+
+################# VISUALIZE THE DATA #################
+
+# Plot global distribution of Hippocampus erectus
+plot(wrld_simpl, xlim = c(-180, 180), ylim = c(-90, 90), axes = TRUE, col = "lightgreen")
+points(Hippocampus_geo, col = 'blue', pch = 20, cex = 0.7)
+title("Global Distribution of Hippocampus erectus")
+
+################# LOAD ENVIRONMENTAL VARIABLES #################
+
+# File paths
+sea_temp_path <- "Env_Data/Sea_Temperature_Current.tif"
+sea_temp_future_path <- "Env_Data/Sea_Temperature_Future.tif"
+
+# Load raster layers
+if (!file.exists(sea_temp_path) || !file.exists(sea_temp_future_path)) {
+  stop("One or more required environmental data files are missing in the Env_Data folder. Please download and place the following files: \n - Sea_Temperature_Current.tif \n - Sea_Temperature_Future.tif")
+}
+
+sea_temperature <- raster(sea_temp_path)
+sea_temperature_future <- raster(sea_temp_future_path)
+
+# Visualize the rasters
+par(mfrow = c(2, 1))
+plot(sea_temperature, main = "Current Sea Temperature", col = viridis(100))
+plot(sea_temperature_future, main = "Future Sea Temperature", col = viridis(100))
+dev.off()
+
+################# BIOCLIM MODELING #################
+
+# Stack current and future environmental variables
+current_env <- stack(sea_temperature)
+future_env <- stack(sea_temperature_future)
+
+# Build the Bioclim model using current environmental data and occurrence points
+bioclim_model <- bioclim(x = current_env, p = Hippocampus_geo)
+
+# Predict current and future habitat suitability
+current_suitability <- predict(bioclim_model, current_env)
+future_suitability <- predict(bioclim_model, future_env)
+
+# Save results
+writeRaster(current_suitability, "Current_Suitability.tif", overwrite = TRUE)
+writeRaster(future_suitability, "Future_Suitability.tif", overwrite = TRUE)
+
+################# VISUALIZE RESULTS #################
+
+# Plot current and future suitability maps
+par(mfrow = c(1, 2))
+plot(current_suitability, main = "Current Suitability", col = viridis(100))
+plot(future_suitability, main = "Future Suitability", col = viridis(100))
+dev.off()
+
+# Calculate the difference between future and current suitability
+difference_suitability <- future_suitability - current_suitability
+plot(difference_suitability, main = "Change in Suitability", col = viridis(100))
+
+
