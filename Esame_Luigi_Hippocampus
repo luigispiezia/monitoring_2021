@@ -1,14 +1,21 @@
-################# LOAD PACKAGES #################
+##############################################################################
+# Project title: mapping the coastal distribution of Hippocampus erectus 
+# in the North-western Atlantic Ocean
+
+################# PACKAGES #################
 
 library(dismo)
 library(raster)
-library(sp)
-library(ggplot2)
 library(maptools)
-library(writexl)
+library(sp)
 library(spThin)
-library(viridis)
+library(ggplot2)
+library(patchwork)
+library(RStoolbox)
+library(writexl)
 library(jsonlite)
+library(rJava)
+library(viridis)  # Aggiunto per scale_fill_viridis
 
 ################# SET THE WORKING DIRECTORY #################
 
@@ -25,73 +32,118 @@ if (file.exists(data_file)) {
   saveRDS(Hippocampus_data, data_file)
 }
 
-# Filter for valid latitude and longitude
-Hippocampus_geo <- subset(Hippocampus_data, !is.na(lon) & !is.na(lat))
+# Show data only if lat and lon are known values (not NA)
+He_geo <- subset(Hippocampus_data, !is.na(lon) & !is.na(lat))
+dim(He_geo)
 
-# Remove duplicates
-Hippocampus_geo <- Hippocampus_geo[!duplicated(Hippocampus_geo[, c("lon", "lat")]), ]
+# Quickly visualize the data
+data(wrld_simpl)  # Load wrld_simpl from maptools as SpatialPolygonsDataFrame 
+plot(wrld_simpl, xlim = c(-180, 180), ylim = c(-90, 90), axes = TRUE, col = "light green")
+points(He_geo$lon, He_geo$lat, col = 'orange', pch = 20, cex = 0.75)
 
-# Convert to spatial points dataframe
-coordinates(Hippocampus_geo) <- ~lon+lat
-crs(Hippocampus_geo) <- CRS("+proj=longlat +datum=WGS84")
+################# DATA CLEANING #################
 
-# Load world map for visualization
-data(wrld_simpl)
+# Find and delete duplicates
+dups <- duplicated(He_geo[, c('lon', 'lat')])
+sum(dups)  # Count duplicates
+heg <- He_geo[!dups, ]
+dim(heg)  # Dimensions after cleaning
 
-################# VISUALIZE THE DATA #################
+# Check for points within raster extent
+ext <- extent(-100, -50, 0, 50)  # Define the extent
+points_in_extent <- !is.na(extract(raster("Env_Data/Sea_Temperature_Current.tif"), heg[, c("lon", "lat")]))
+heg <- heg[points_in_extent, ]
 
-# Plot global distribution of Hippocampus erectus
-plot(wrld_simpl, xlim = c(-180, 180), ylim = c(-90, 90), axes = TRUE, col = "lightgreen")
-points(Hippocampus_geo, col = 'blue', pch = 20, cex = 0.7)
-title("Global Distribution of Hippocampus erectus")
+# Back to normal dataframe and save
+heg <- as.data.frame(heg)
 
-################# LOAD ENVIRONMENTAL VARIABLES #################
+################# IMPORT RASTER LAYERS FOR THE ENV VARIABLES #################
 
-# File paths
-sea_temp_path <- "Env_Data/Sea_Temperature_Current.tif"
-sea_temp_future_path <- "Env_Data/Sea_Temperature_Future.tif"
+# Raster layers were downloaded from BioOracle
+sea_temperature <- raster("Env_Data/Sea_Temperature_Current.tif")
+sea_temperature_future <- raster("Env_Data/Sea_Temperature_Future.tif")
+salinity <- raster("Env_Data/Salinity_Current.tif")
+salinity_future <- raster("Env_Data/Salinity_Future.tif")
 
-# Load raster layers
-if (!file.exists(sea_temp_path) || !file.exists(sea_temp_future_path)) {
-  stop("One or more required environmental data files are missing in the Env_Data folder. Please download and place the following files: \n - Sea_Temperature_Current.tif \n - Sea_Temperature_Future.tif")
-}
+# Ensure raster layers have the same CRS
+sea_temperature <- projectRaster(sea_temperature, crs = crs(ext))
+salinity <- projectRaster(salinity, crs = crs(ext))
 
-sea_temperature <- raster(sea_temp_path)
-sea_temperature_future <- raster(sea_temp_future_path)
+# Crop raster layers to the extent
+sea_temperature_cropped <- crop(sea_temperature, ext)
+sea_temperature_future_cropped <- crop(sea_temperature_future, ext)
+salinity_cropped <- crop(salinity, ext)
+salinity_future_cropped <- crop(salinity_future, ext)
 
-# Visualize the rasters
-par(mfrow = c(2, 1))
-plot(sea_temperature, main = "Current Sea Temperature", col = viridis(100))
-plot(sea_temperature_future, main = "Future Sea Temperature", col = viridis(100))
-dev.off()
+# Difference
+crp <- colorRampPalette(c('red', 'gold', 'darkgoldenrod3', "cyan", "cyan4", "chartreuse1", "darkgreen"))(100)
+temp_difference <- sea_temperature_cropped - sea_temperature_future_cropped
+plot(temp_difference, col = crp, main = "Expected future changes in mean ocean sea surface temperature (\u00b0C)")
+sal_difference <- salinity_cropped - salinity_future_cropped
+plot(sal_difference, col = crp, main = "Expected future changes in mean ocean salinity (\u00b0C)")
 
-################# BIOCLIM MODELING #################
+################# PLOT PRESENCE DATA ON A RASTER #################
 
-# Stack current and future environmental variables
-current_env <- stack(sea_temperature)
-future_env <- stack(sea_temperature_future)
+# Convert to SPDF
+coordinates(heg) <- ~lon + lat
+crs(heg) <- crs(wrld_simpl)
 
-# Build the Bioclim model using current environmental data and occurrence points
-bioclim_model <- bioclim(x = current_env, p = Hippocampus_geo)
+# Crop to Sargasso Sea
+heg2 <- crop(heg, ext)
+heg2 <- as.data.frame(heg2)  # Back to normal dataframe
 
-# Predict current and future habitat suitability
-current_suitability <- predict(bioclim_model, current_env)
-future_suitability <- predict(bioclim_model, future_env)
+raster_df <- as.data.frame(sea_temperature_cropped, xy = TRUE)
 
-# Save results
-writeRaster(current_suitability, "Current_Suitability.tif", overwrite = TRUE)
-writeRaster(future_suitability, "Future_Suitability.tif", overwrite = TRUE)
+ggplot() +
+  geom_raster(data = raster_df, aes(x = x, y = y, fill = Sea_Temperature_Current)) +
+  geom_point(data = heg2, aes(x = lon, y = lat), color = "black", size = 1) +
+  scale_fill_viridis(option = "cividis", na.value = "transparent", name = "Temperature (\u00b0C)") +
+  labs(title = "Current distribution of Hippocampus erectus in the Sargasso Sea",
+       x = "Longitude",
+       y = "Latitude") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, size = 14)
+  )
 
-################# VISUALIZE RESULTS #################
+################# MAXENT #################
 
-# Plot current and future suitability maps
-par(mfrow = c(1, 2))
-plot(current_suitability, main = "Current Suitability", col = viridis(100))
-plot(future_suitability, main = "Future Suitability", col = viridis(100))
-dev.off()
+# Stack raster layers 
+past <- stack(sea_temperature_cropped, salinity_cropped)
+fut <- stack(sea_temperature_future_cropped, salinity_future_cropped)
+names(fut) <- names(past)  # Assign the same names to both
 
-# Calculate the difference between future and current suitability
-difference_suitability <- future_suitability - current_suitability
-plot(difference_suitability, main = "Change in Suitability", col = viridis(100))
+# MAXENT: x = env variables, p = occurrences
+model <- maxent(p = heg2[, c("lon", "lat")], x = past, nbg = 20000)
+
+# Response curve and prediction
+plot(model)
+response(model)
+
+# Prediction past and future
+map_past <- predict(model, past)
+map_fut <- predict(model, fut)
+
+# Plot the layers
+names(map_past) <- "Probability"
+map_past_df <- as.data.frame(map_past, xy = TRUE)
+p1 <- ggplot() + geom_raster(map_past_df, mapping = aes(x = x, y = y, fill = Probability)) +
+  scale_fill_viridis(option = "cividis", na.value = "transparent") + theme_gray() +
+  ggtitle("Present distribution probabilities of Hippocampus erectus") +
+  labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+names(map_fut) <- "Probability"
+map_fut_df <- as.data.frame(map_fut, xy = TRUE)
+p2 <- ggplot() + geom_raster(map_fut_df, mapping = aes(x = x, y = y, fill = Probability)) +
+  scale_fill_viridis(option = "cividis", na.value = "transparent") + theme_gray() +
+  ggtitle("Future distribution probabilities of Hippocampus erectus") +
+  labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+# Plot the graphs together
+p1 + p2
+
 
 
