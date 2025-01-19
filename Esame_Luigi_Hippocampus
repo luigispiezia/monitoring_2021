@@ -1,8 +1,8 @@
 ##############################################################################
-# Project title: mapping the coastal distribution of Hippocampus erectus 
-# in the North-western Atlantic Ocean
+#Project title: mapping the coastal distribution of Hippocampus erectus 
+#in the North-western Atlantic Ocean
 
-################# PACKAGES #################
+#################PACKAGES#################
 
 library(dismo)
 library(raster)
@@ -15,13 +15,13 @@ library(RStoolbox)
 library(writexl)
 library(jsonlite)
 library(rJava)
-library(viridis)  # Aggiunto per scale_fill_viridis
+library (viridis)
 
-################# SET THE WORKING DIRECTORY #################
+#################SET THE WORKING DIRECTORY#################
 
 setwd("/Users/luigispiezia/Desktop/esame/")
 
-################# IMPORT DATA #################
+#################IMPORT DATA#################
 
 # Cache GBIF data for Hippocampus erectus to avoid re-downloading
 data_file <- "cached_Hippocampus_data.rds"
@@ -32,118 +32,150 @@ if (file.exists(data_file)) {
   saveRDS(Hippocampus_data, data_file)
 }
 
-# Show data only if lat and lon are known values (not NA)
+#Hippocampus_data <- gbif("Hippocampus", "erectus", geo=TRUE, removeZeros = FALSE)
+colnames(Hippocampus_data)
+#longitude: lon 
+#latitude: lat
+
+#show data only if lat and lon are known values (notNA)
 He_geo <- subset(Hippocampus_data, !is.na(lon) & !is.na(lat))
 dim(He_geo)
 
-# Quickly visualize the data
-data(wrld_simpl)  # Load wrld_simpl from maptools as SpatialPolygonsDataFrame 
-plot(wrld_simpl, xlim = c(-180, 180), ylim = c(-90, 90), axes = TRUE, col = "light green")
-points(He_geo$lon, He_geo$lat, col = 'orange', pch = 20, cex = 0.75)
+#quickly visualize the data
+data(wrld_simpl)#load wrld_simpl from maptools as SpatialPolygonsDataFrame 
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(-90,90), axes=TRUE, col="light green")
 
-################# DATA CLEANING #################
+# add the points
+points(He_geo$lon, He_geo$lat, col='orange', pch=20, cex=0.75)
 
-# Find and delete duplicates
+#################DATA CLEANING#################
+
+#find and delete the duplicates
 dups <- duplicated(He_geo[, c('lon', 'lat')])
-sum(dups)  # Count duplicates
+sum(dups)#6518
 heg <- He_geo[!dups, ]
-dim(heg)  # Dimensions after cleaning
+dim(heg)#14488
+dim(He_geo)#18368
+#we lost 3880 duplicates
 
-# Check for points within raster extent
-ext <- extent(-100, -50, 0, 50)  # Define the extent
-points_in_extent <- !is.na(extract(raster("Env_Data/Sea_Temperature_Current.tif"), heg[, c("lon", "lat")]))
-heg <- heg[points_in_extent, ]
+#plot cleaned data
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(-90,90), axes=TRUE, col="#FFCC66", bg = "light blue", main = "Global distribution of the Hippocampus erectus")
+points(heg$lon, heg$lat, col='red', pch=20, cex=0.75)
 
-# Back to normal dataframe and save
+#back to normal dataframe and save
 heg <- as.data.frame(heg)
 
-################# IMPORT RASTER LAYERS FOR THE ENV VARIABLES #################
 
-# Raster layers were downloaded from BioOracle
+#################IMPORT RASTER LAYERS FOR THE ENV VARIABLES#################
+#raster layers were downloaded from BioOracle
+
 sea_temperature <- raster("Env_Data/Sea_Temperature_Current.tif")
 sea_temperature_future <- raster("Env_Data/Sea_Temperature_Future.tif")
 salinity <- raster("Env_Data/Salinity_Current.tif")
 salinity_future <- raster("Env_Data/Salinity_Future.tif")
 
-# Ensure raster layers have the same CRS
-sea_temperature <- projectRaster(sea_temperature, crs = crs(ext))
-salinity <- projectRaster(salinity, crs = crs(ext))
+#to better visualize the raster layers I will apply the ColorRampPalette
+crp <- colorRampPalette(c('red','gold','darkgoldenrod3',"cyan","cyan4","chartreuse1","darkgreen"))(100)
 
-# Crop raster layers to the extent
+#crop
+ext <- extent(-100, -50, 0, 50)
 sea_temperature_cropped <- crop(sea_temperature, ext)
+#plot(sea_temperature_cropped, col = crp, main = "Current (2000-2014) Sea Temperature (°C)")
 sea_temperature_future_cropped <- crop(sea_temperature_future, ext)
+#plot(sea_temperature_future_cropped, col = crp, main = "Future (2090-2100) Sea Temperature (°C)")
 salinity_cropped <- crop(salinity, ext)
 salinity_future_cropped <- crop(salinity_future, ext)
 
-# Difference
-crp <- colorRampPalette(c('red', 'gold', 'darkgoldenrod3', "cyan", "cyan4", "chartreuse1", "darkgreen"))(100)
-temp_difference <- sea_temperature_cropped - sea_temperature_future_cropped
-plot(temp_difference, col = crp, main = "Expected future changes in mean ocean sea surface temperature (\u00b0C)")
-sal_difference <- salinity_cropped - salinity_future_cropped
-plot(sal_difference, col = crp, main = "Expected future changes in mean ocean salinity (\u00b0C)")
+#difference
+temp_difference <- sea_temperature_cropped-sea_temperature_future_cropped
+plot(temp_difference, col = crp, main = "Expected future changes in mean ocean sea surface temperature (°C)")
+sal_difference <- salinity_cropped-salinity_future_cropped
+plot(sal_difference, col = crp, main = "Expected future changes in mean ocean salinity (°C)")
 
-################# PLOT PRESENCE DATA ON A RASTER #################
 
-# Convert to SPDF
-coordinates(heg) <- ~lon + lat
+#################PLOT PRESENCE DATA ON A RASTER#################
+
+#create a SPDF
+coordinates(heg) <- ~lon+lat
 crs(heg) <- crs(wrld_simpl)
+class(heg)
 
-# Crop to Sargasso Sea
+#crop on the extent of the Sargasso Sea
 heg2 <- crop(heg, ext)
-heg2 <- as.data.frame(heg2)  # Back to normal dataframe
+
+#back to normal dataframe and save
+heg2 <- as.data.frame(heg2)
 
 raster_df <- as.data.frame(sea_temperature_cropped, xy = TRUE)
 
 ggplot() +
-  geom_raster(data = raster_df, aes(x = x, y = y, fill = Sea_Temperature_Current)) +
-  geom_point(data = heg2, aes(x = lon, y = lat), color = "black", size = 1) +
-  scale_fill_viridis(option = "cividis", na.value = "transparent", name = "Temperature (\u00b0C)") +
+  # Raster layer
+  geom_raster(data = raster_df, aes(x = x, y = y, fill = prestemp)) +
+  # Add presence points (heg2 is assumed to be your presence data)
+  geom_point(data = heg2, aes(x = x, y = y), color = "black", size = 1) +
+  # Set the color scale for the raster layer
+  scale_fill_gradientn(colors = c("blue", "green", "yellow", "red"), 
+                       name = "Temperature (°C)") +
+  # Title and labels
   labs(title = "Current distribution of Hippocampus erectus in the Sargasso Sea",
        x = "Longitude",
        y = "Latitude") +
+  # Optional: Adjust theme for better appearance
   theme_minimal() +
   theme(
-    legend.position = "bottom",
+    legend.position = "bottom",  # Place legend at the bottom
     plot.title = element_text(hjust = 0.5, size = 14)
   )
 
-################# MAXENT #################
+#################MAXENT#################
 
-# Stack raster layers 
+#stack raster layers 
 past <- stack(sea_temperature_cropped, salinity_cropped)
 fut <- stack(sea_temperature_future_cropped, salinity_future_cropped)
-names(fut) <- names(past)  # Assign the same names to both
+names(fut) <- names(past) #assign the same names to both
 
-# MAXENT: x = env variables, p = occurrences
-model <- maxent(p = heg2[, c("lon", "lat")], x = past, nbg = 20000)
+#MAXENT: x = env variables, p = occurrences (as SPDF or dataframe)
+#p should only contain two columns lat-lon (in our case x-y)
+model <- maxent(p = heg2[, c("x", "y")], x = past, nbg = 20000)
 
-# Response curve and prediction
-plot(model)
-response(model)
+#response curve: prob finding the species at those variable values
+plot(model)#variable importance
+response(model)#curves: probability of occurence on temperature/ice thickness
 
-# Prediction past and future
-map_past <- predict(model, past)
-map_fut <- predict(model, fut)
+#prediction past 
+map_past <- predict(model, past)#prob suitability based on current conditions
 
-# Plot the layers
+#prediction future
+map_fut <- predict(model, fut)#prob suitability based on expected future conditions
+
+#plot the layers
 names(map_past) <- "Probability"
 map_past_df <- as.data.frame(map_past, xy = TRUE)
-p1 <- ggplot() + geom_raster(map_past_df, mapping = aes(x = x, y = y, fill = Probability)) +
-  scale_fill_viridis(option = "cividis", na.value = "transparent") + theme_gray() +
-  ggtitle("Present distribution probabilities of Hippocampus erectus") +
-  labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+p1 <- ggplot() + geom_raster(map_past_df, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Present distribution probabilities of Hippocampus erectus")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
   theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
 
 names(map_fut) <- "Probability"
 map_fut_df <- as.data.frame(map_fut, xy = TRUE)
-p2 <- ggplot() + geom_raster(map_fut_df, mapping = aes(x = x, y = y, fill = Probability)) +
-  scale_fill_viridis(option = "cividis", na.value = "transparent") + theme_gray() +
-  ggtitle("Future distribution probabilities of Hippocampus erectus") +
-  labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+p2 <- ggplot() + geom_raster(map_fut_df, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "turbo", na.value = "transparent")+ theme_gray()+
+  ggtitle("Future distribution probabilities of Hippocampus erectus")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
   theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
 
-# Plot the graphs together
+#plot the graphs together (using patchwork package)
 p1 + p2
 
+#in order to create graphs to be as colorblind-friendly as possible I also plotted the same graphs using cividis
 
+p1 <- ggplot() + geom_raster(map_past_df, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Present distribution probabilities of Hippocampus erectus")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
 
+p2 <- ggplot() + geom_raster(map_fut_df, mapping = aes(x = x,y = y, fill=Probability))+
+  scale_fill_viridis(option= "cividis", na.value = "transparent")+ theme_gray()+
+  ggtitle("Future distribution probabilities of Hippocampus erectus")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
+  theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
+
+p1 + p2
