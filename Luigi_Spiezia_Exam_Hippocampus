@@ -110,7 +110,7 @@ raster_df <- as.data.frame(sea_temperature_cropped, xy = TRUE)
 
 ggplot() +
   # Raster layer
-  geom_raster(data = raster_df, aes(x = x, y = y, fill = prestemp)) +
+  geom_raster(data = raster_df, aes(x = x, y = y, fill = thetao_mean)) +
   # Add presence points (heg2 is assumed to be your presence data)
   geom_point(data = heg2, aes(x = x, y = y), color = "black", size = 1) +
   # Set the color scale for the raster layer
@@ -140,7 +140,7 @@ model <- maxent(p = heg2[, c("x", "y")], x = past, nbg = 20000)
 
 #response curve: prob finding the species at those variable values
 plot(model)#variable importance
-response(model)#curves: probability of occurence on temperature/ice thickness
+response(model)#curves: probability of occurence on temperature/salinity
 
 #prediction past 
 map_past <- predict(model, past)#prob suitability based on current conditions
@@ -163,7 +163,7 @@ p2 <- ggplot() + geom_raster(map_fut_df, mapping = aes(x = x,y = y, fill=Probabi
   ggtitle("Future distribution probabilities of Hippocampus erectus")+labs(x = "Longitude", y = "Latitude", caption = "Prediction: Maxent version 3.4.3") + 
   theme(axis.title = element_text(size = 15), plot.title = element_text(hjust = 0.5, size = 16, face = "bold.italic"))
 
-#plot the graphs together (using patchwork package)
+#plot the graphs together 
 p1 + p2
 
 #in order to create graphs to be as colorblind-friendly as possible I also plotted the same graphs using cividis
