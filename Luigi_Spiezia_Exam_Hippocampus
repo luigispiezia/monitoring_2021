@@ -100,7 +100,7 @@ coordinates(heg) <- ~lon+lat
 crs(heg) <- crs(wrld_simpl)
 class(heg)
 
-#crop on the extent of the Sargasso Sea
+#crop on the extent of the North Atlantic
 heg2 <- crop(heg, ext)
 
 #back to normal dataframe and save
