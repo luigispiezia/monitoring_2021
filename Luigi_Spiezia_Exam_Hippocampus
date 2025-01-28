@@ -117,7 +117,7 @@ ggplot() +
   scale_fill_gradientn(colors = c("blue", "green", "yellow", "red"), 
                        name = "Temperature (°C)") +
   # Title and labels
-  labs(title = "Current distribution of Hippocampus erectus in the Sargasso Sea",
+  labs(title = "Current distribution of Hippocampus erectus in the North Atlantic",
        x = "Longitude",
        y = "Latitude") +
   # Optional: Adjust theme for better appearance
